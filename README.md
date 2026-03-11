@@ -56,23 +56,29 @@ The bot:
 - De-duplicates by job title so you don’t get spammed with the same listing.
 - Sends clickable titles linking to the job page.
 
-### 4. Deployment ideas
+### 4. Deploy on Render (free tier)
 
-- **Cheap VPS (recommended for polling bots)**
-  - Provision a small VPS (DigitalOcean/Linode/etc.).
-  - Install Node.js and git.
-  - Pull this repo, set `.env`, run via `pm2`:
+The app runs as a **Web Service** (not a worker) so it works on the free plan.
 
-    ```bash
-    pm2 start src/bot.js --name mern-job-bot
-    pm2 save
-    pm2 startup
-    ```
+1. Push this repo to GitHub, then in [Render](https://dashboard.render.com): **New +** → **Blueprint** → connect the repo.
+2. Render will use `render.yaml`: it creates a **Web Service** and sets `startCommand: node src/server.js`.
+3. In the service **Environment** tab, set:
+   - `TELEGRAM_BOT_TOKEN` = your BotFather token  
+   - (Optional) `CRON_SECRET` = a random string; use it in the cron URL so only your cron can trigger checks.
+4. Deploy. Render assigns a URL like `https://telegram-job-lead-bot-xxx.onrender.com`. The bot sets its Telegram webhook to `https://.../webhook` automatically using `RENDER_EXTERNAL_URL`.
+5. **Optional – periodic job checks:** On the free tier the app may sleep when idle. To run job checks every 10 minutes, use [cron-job.org](https://cron-job.org): create a job that GETs  
+   `https://YOUR-RENDER-URL.onrender.com/cron?key=YOUR_CRON_SECRET`  
+   every 10 minutes. Use the same `CRON_SECRET` you set in Render.
 
-- **Serverless/webhook variant (later upgrade)**
-  - Convert from polling to webhook mode and host behind a simple Node server (Render/Heroku/Fly.io).
+**Local (polling):** Run `npm start` (runs `node src/bot.js`) for polling.  
+**Render (webhook):** Runs `node src/server.js` with webhook + optional `/cron` for checks.
 
-### 5. Monetization angles
+### 5. Other deployment ideas
+
+- **Cheap VPS (always-on polling)**
+  - Provision a small VPS, clone repo, set `.env`, run: `pm2 start src/bot.js --name mern-job-bot`
+
+### 6. Monetization angles
 
 - **SaaS-ish subscription**
   - Free tier: 1 keyword, slower checks (every 30–60 mins).
@@ -84,7 +90,7 @@ The bot:
     - Record a short Loom of the bot catching real MERN jobs.
     - Upsell: add email notifications, Google Sheets logging, more sources (Indeed, LinkedIn, etc.).
 
-### 6. Notes & limitations
+### 7. Notes & limitations
 
 - Scraping/HTML structure can change on Upwork/Freelancer; if selectors break, tweak them in `src/bot.js`.
 - This version keeps all state **in memory** (fine for a simple VPS bot). For production, persist user/keywords and last seen IDs in a small DB (SQLite/Postgres/Mongo).

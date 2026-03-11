@@ -5,97 +5,94 @@ require('dotenv').config();
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
-if (!token) {
-  console.error('Error: TELEGRAM_BOT_TOKEN is not set in .env');
-  process.exit(1);
-}
-
-// Polling-based bot (easy to deploy on a small VPS or long-running process)
-const bot = new TelegramBot(token, { polling: true });
-
 // In‑memory user tracking: { [chatId]: { keyword, lastUpworkTitles: Set, lastFreelancerTitles: Set, lastRemotiveTitles: Set } }
 const users = {};
-
 const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  const text =
-    '👋 Welcome to MERN Job Lead Bot!\n\n' +
-    'I scan Upwork & Freelancer for your niche and send fresh leads.\n\n' +
-    'Use:\n' +
-    '• /track mern developer remote\n' +
-    '• /track react node js india\n\n' +
-    'You can change your keyword anytime with another /track command.';
+function createBot(usePolling = true) {
+  if (!token) {
+    console.error('Error: TELEGRAM_BOT_TOKEN is not set in .env');
+    process.exit(1);
+  }
 
-  bot.sendMessage(chatId, text, { parse_mode: 'Markdown' }).catch(console.error);
-});
+  const bot = new TelegramBot(token, { polling: usePolling });
 
-bot.onText(/\/track\s+(.+)/i, async (msg, match) => {
-  const chatId = msg.chat.id;
-  const keyword = (match && match[1] ? match[1] : '').trim();
+  bot.onText(/\/start/, (msg) => {
+    const chatId = msg.chat.id;
+    const text =
+      '👋 Welcome to MERN Job Lead Bot!\n\n' +
+      'I scan Upwork & Freelancer for your niche and send fresh leads.\n\n' +
+      'Use:\n' +
+      '• /track mern developer remote\n' +
+      '• /track react node js india\n\n' +
+      'You can change your keyword anytime with another /track command.';
 
-  if (!keyword) {
+    bot.sendMessage(chatId, text, { parse_mode: 'Markdown' }).catch(console.error);
+  });
+
+  bot.onText(/\/track\s+(.+)/i, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const keyword = (match && match[1] ? match[1] : '').trim();
+
+    if (!keyword) {
+      bot
+        .sendMessage(chatId, 'Please provide a keyword, e.g. `/track mern developer`', {
+          parse_mode: 'Markdown',
+        })
+        .catch(console.error);
+      return;
+    }
+
+    if (!users[chatId]) {
+      users[chatId] = {
+        keyword,
+        lastUpworkTitles: new Set(),
+        lastFreelancerTitles: new Set(),
+        lastRemotiveTitles: new Set(),
+      };
+    } else {
+      users[chatId].keyword = keyword;
+    }
+
     bot
-      .sendMessage(chatId, 'Please provide a keyword, e.g. `/track mern developer`', {
-        parse_mode: 'Markdown',
-      })
+      .sendMessage(
+        chatId,
+        `✅ Tracking leads for: *${keyword}*\n\nYou will get alerts about new jobs from Upwork, Freelancer & Remotive every ${POLL_INTERVAL_MS / 60000} minutes.`,
+        { parse_mode: 'Markdown' },
+      )
       .catch(console.error);
-    return;
-  }
 
-  if (!users[chatId]) {
-    users[chatId] = {
-      keyword,
-      lastUpworkTitles: new Set(),
-      lastFreelancerTitles: new Set(),
-      lastRemotiveTitles: new Set(),
-    };
-  } else {
-    users[chatId].keyword = keyword;
-  }
+    try {
+      await checkLeadsForUser(chatId);
+    } catch (err) {
+      console.error(err);
+      bot.sendMessage(chatId, 'There was an error fetching jobs just now, will retry soon.').catch(console.error);
+    }
+  });
 
-  bot
-    .sendMessage(
-      chatId,
-      `✅ Tracking leads for: *${keyword}*\n\nYou will get alerts about new jobs from Upwork, Freelancer & Remotive every ${POLL_INTERVAL_MS / 60000} minutes.`,
-      { parse_mode: 'Markdown' },
-    )
-    .catch(console.error);
-
-  // Immediate first check so they see it working
-  try {
-    await checkLeadsForUser(chatId);
-  } catch (err) {
-    console.error(err);
-    bot.sendMessage(chatId, 'There was an error fetching jobs just now, will retry soon.').catch(console.error);
-  }
-});
-
-bot.onText(/\/status/, (msg) => {
-  const chatId = msg.chat.id;
-  const user = users[chatId];
-  if (!user || !user.keyword) {
-    bot.sendMessage(chatId, 'You are not tracking anything yet. Use `/track mern developer`.', {
+  bot.onText(/\/status/, (msg) => {
+    const chatId = msg.chat.id;
+    const user = users[chatId];
+    if (!user || !user.keyword) {
+      bot.sendMessage(chatId, 'You are not tracking anything yet. Use `/track mern developer`.', {
+        parse_mode: 'Markdown',
+      });
+      return;
+    }
+    bot.sendMessage(chatId, `You are currently tracking: *${user.keyword}*`, {
       parse_mode: 'Markdown',
     });
-    return;
-  }
-
-  bot.sendMessage(chatId, `You are currently tracking: *${user.keyword}*`, {
-    parse_mode: 'Markdown',
   });
-});
 
-bot.onText(/\/stop/, (msg) => {
-  const chatId = msg.chat.id;
-  if (users[chatId]) {
-    delete users[chatId];
-    bot.sendMessage(chatId, '🛑 Stopped tracking job leads for this chat.');
-  } else {
-    bot.sendMessage(chatId, 'You were not tracking any keywords.');
-  }
-});
+  bot.onText(/\/stop/, (msg) => {
+    const chatId = msg.chat.id;
+    if (users[chatId]) {
+      delete users[chatId];
+      bot.sendMessage(chatId, '🛑 Stopped tracking job leads for this chat.');
+    } else {
+      bot.sendMessage(chatId, 'You were not tracking any keywords.');
+    }
+  });
 
 async function checkLeadsForUser(chatId) {
   const user = users[chatId];
@@ -273,11 +270,21 @@ async function fetchRemotiveJobs(keyword) {
   }
 }
 
-// Global polling loop
-setInterval(() => {
-  Object.keys(users).forEach((chatId) => {
-    checkLeadsForUser(chatId);
-  });
-}, POLL_INTERVAL_MS);
+  if (usePolling) {
+    setInterval(() => {
+      Object.keys(users).forEach((chatId) => {
+        checkLeadsForUser(chatId);
+      });
+    }, POLL_INTERVAL_MS);
+    console.log('MERN Job Lead Bot is running (polling)...');
+  }
 
-console.log('MERN Job Lead Bot is running...');
+  return { bot, users, checkLeadsForUser };
+}
+
+module.exports = { createBot, users, POLL_INTERVAL_MS };
+
+// When run directly (e.g. locally), use polling
+if (require.main === module) {
+  createBot(true);
+}
