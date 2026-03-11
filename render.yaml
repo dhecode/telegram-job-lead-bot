@@ -1,0 +1,11 @@
+services:
+  - type: worker
+    name: telegram-job-lead-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node src/bot.js
+    autoDeploy: true
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
