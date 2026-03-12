@@ -40,8 +40,11 @@ app.get('/cron', async (req, res) => {
 app.listen(PORT, async () => {
   if (WEBHOOK_BASE) {
     const webhookUrl = `${WEBHOOK_BASE.replace(/\/$/, '')}/webhook`;
-    await bot.setWebHook(webhookUrl);
-    console.log('Webhook set:', webhookUrl);
+    // Don't block startup on webhook call (avoid Render start timeouts).
+    bot
+      .setWebHook(webhookUrl)
+      .then(() => console.log('Webhook set:', webhookUrl))
+      .catch((err) => console.error('Failed to set webhook:', err.message || err));
   }
   console.log('MERN Job Lead Bot (web) listening on port', PORT);
 });

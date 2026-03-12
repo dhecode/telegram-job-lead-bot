@@ -4,8 +4,10 @@
   "description": "Telegram bot that tracks MERN-related freelance job leads on Upwork/Freelancer and sends alerts.",
   "main": "src/bot.js",
   "scripts": {
-    "start": "node src/bot.js",
-    "dev": "NODE_ENV=development node src/bot.js"
+    "start": "node src/server.js",
+    "start:poll": "node src/bot.js",
+    "dev": "NODE_ENV=development node src/server.js",
+    "dev:poll": "NODE_ENV=development node src/bot.js"
   },
   "keywords": [
     "telegram",

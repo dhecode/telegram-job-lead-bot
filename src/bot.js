@@ -17,6 +17,11 @@ function createBot(usePolling = true) {
 
   const bot = new TelegramBot(token, { polling: usePolling });
 
+  // If polling is enabled, ensure webhook is disabled to avoid 409 Conflicts.
+  if (usePolling) {
+    bot.deleteWebHook({ drop_pending_updates: true }).catch(() => {});
+  }
+
   bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     const text =
@@ -94,7 +99,7 @@ function createBot(usePolling = true) {
     }
   });
 
-async function checkLeadsForUser(chatId) {
+  async function checkLeadsForUser(chatId) {
   const user = users[chatId];
   if (!user || !user.keyword) return;
 
@@ -149,7 +154,7 @@ async function checkLeadsForUser(chatId) {
   } catch (error) {
     console.error(`Error checking leads for chat ${chatId}:`, error.message || error);
   }
-}
+  }
 
 function filterNewTitles(jobs, seenSet) {
   const fresh = [];
